@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Autentificare în doi pași</title>
+    <title>Autentificare MFA</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 600px;
+            max-width: 500px;
             margin: 0 auto;
             padding: 20px;
         }
         .container {
-            border: 1px solid #ddd;
-            padding: 20px;
+            background-color: #f9f9f9;
             border-radius: 5px;
-            margin-bottom: 20px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .hidden {
             display: none;
@@ -24,6 +24,8 @@
             width: 100%;
             padding: 10px;
             margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
             box-sizing: border-box;
         }
         button {
@@ -33,238 +35,183 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            font-size: 16px;
+            width: 100%;
         }
         button:hover {
             background-color: #45a049;
         }
-        .qr-code {
+        .qr-container {
             text-align: center;
             margin: 20px 0;
         }
-        .qr-code img {
-            max-width: 200px;
+        .error {
+            color: red;
+            margin-top: 5px;
+        }
+        .success {
+            color: green;
+            margin-top: 5px;
         }
     </style>
 </head>
 <body>
-    <h1>Sistem de autentificare în doi pași</h1>
-    
-    <!-- Formular de înregistrare -->
-    <div id="register-container" class="container">
-        <h2>Înregistrare</h2>
-        <form id="register-form">
+    <div class="container">
+        <h1>Autentificare securizată</h1>
+        
+        <!-- Pasul 1: Login form -->
+        <div id="loginForm">
+            <h2>Pasul 1: Autentificare cu parolă</h2>
             <div>
-                <label for="register-username">Nume utilizator:</label>
-                <input type="text" id="register-username" required>
+                <label for="username">Nume utilizator:</label>
+                <input type="text" id="username" required>
             </div>
             <div>
-                <label for="register-password">Parolă:</label>
-                <input type="password" id="register-password" required>
+                <label for="password">Parolă:</label>
+                <input type="password" id="password" required>
             </div>
-            <button type="submit">Înregistrare</button>
-        </form>
+            <div id="loginError" class="error hidden">Nume utilizator sau parolă incorecte!</div>
+            <button onclick="verifyFirstFactor()">Continuă</button>
+        </div>
+        
+        <!-- Pasul 2: MFA form -->
+        <div id="mfaForm" class="hidden">
+            <h2>Pasul 2: Verificare cod MFA</h2>
+            <p>Deschideți aplicația Single ID Authenticator și introduceți codul generat:</p>
+            <div>
+                <label for="mfaCode">Cod din aplicație:</label>
+                <input type="text" id="mfaCode" placeholder="000000" maxlength="6">
+            </div>
+            <div id="mfaError" class="error hidden">Cod invalid sau expirat!</div>
+            <button onclick="verifySecondFactor()">Verifică</button>
+            <button onclick="backToLogin()" style="background-color: #ccc; margin-top: 10px;">Înapoi</button>
+        </div>
+        
+        <!-- Setup MFA pentru prima dată -->
+        <div id="setupMFA" class="hidden">
+            <h2>Configurare autentificare în doi pași</h2>
+            <p>Scanați codul QR de mai jos folosind aplicația Single ID Authenticator:</p>
+            <div class="qr-container">
+                <!-- Aici ar fi un cod QR dinamic generat pe server -->
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=otpauth://totp/ExempluSite:utilizator@exemplu.com?secret=JBSWY3DPEHPK3PXP&issuer=ExempluSite" alt="Cod QR pentru MFA">
+            </div>
+            <p>Sau introduceți manual această cheie secretă în aplicație:</p>
+            <div class="qr-container">
+                <code>JBSWY3DPEHPK3PXP</code>
+            </div>
+            <p>Apoi introduceți codul generat pentru a verifica configurarea:</p>
+            <div>
+                <input type="text" id="setupCode" placeholder="000000" maxlength="6">
+            </div>
+            <div id="setupError" class="error hidden">Cod invalid. Verificați configurarea.</div>
+            <button onclick="confirmMfaSetup()">Finalizează configurarea</button>
+        </div>
+        
+        <!-- Success page -->
+        <div id="successPage" class="hidden">
+            <h2>Autentificare reușită!</h2>
+            <p class="success">V-ați autentificat cu succes folosind verificarea în doi pași.</p>
+            <div>
+                <p>Bine ați venit la contul dvs. securizat.</p>
+                <button onclick="logout()">Deconectare</button>
+            </div>
+        </div>
     </div>
-    
-    <!-- Configurare MFA -->
-    <div id="mfa-setup-container" class="container hidden">
-        <h2>Configurare autentificare în doi pași</h2>
-        <p>Scanează codul QR cu aplicația Single ID Authenticator:</p>
-        <div class="qr-code" id="qr-code-container"></div>
-        <p>Sau introdu acest cod secret manual în aplicație:</p>
-        <code id="secret-code"></code>
-        <form id="verify-setup-form">
-            <div>
-                <label for="setup-token">Introdu codul din aplicație:</label>
-                <input type="text" id="setup-token" required>
-            </div>
-            <button type="submit">Verifică și activează</button>
-        </form>
-    </div>
-    
-    <!-- Formular de autentificare -->
-    <div id="login-container" class="container">
-        <h2>Autentificare</h2>
-        <form id="login-form">
-            <div>
-                <label for="login-username">Nume utilizator:</label>
-                <input type="text" id="login-username" required>
-            </div>
-            <div>
-                <label for="login-password">Parolă:</label>
-                <input type="password" id="login-password" required>
-            </div>
-            <button type="submit">Autentificare</button>
-        </form>
-    </div>
-    
-    <!-- Verificare MFA -->
-    <div id="mfa-verify-container" class="container hidden">
-        <h2>Verificare în doi pași</h2>
-        <p>Introdu codul din aplicația Single ID Authenticator:</p>
-        <form id="verify-login-form">
-            <div>
-                <label for="login-token">Cod:</label>
-                <input type="text" id="login-token" required>
-            </div>
-            <button type="submit">Verifică</button>
-        </form>
-    </div>
-    
-    <!-- Zona protejată -->
-    <div id="protected-container" class="container hidden">
-        <h2>Profil utilizator</h2>
-        <p>Bine ai venit, <span id="username-display"></span>!</p>
-        <p>Ai accesat cu succes zona protejată.</p>
-        <button id="logout-button">Deconectare</button>
-    </div>
-    
+
     <script>
-        // Gestionarea înregistrării
-        document.getElementById('register-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        // Simulation data - în mod normal ar fi pe server
+        const users = {
+            'admin': {
+                password: 'parola123',
+                mfaEnabled: true,
+                mfaSecret: 'JBSWY3DPEHPK3PXP'
+            },
+            'test': {
+                password: 'test',
+                mfaEnabled: false,
+                mfaSecret: ''
+            }
+        };
+        
+        // Funcții pentru simularea verificării - în producție implementați server-side
+        function verifyFirstFactor() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorElem = document.getElementById('loginError');
             
-            const username = document.getElementById('register-username').value;
-            const password = document.getElementById('register-password').value;
-            
-            try {
-                const response = await fetch('/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
+            // Verificare simplă a credențialelor
+            if (users[username] && users[username].password === password) {
+                errorElem.classList.add('hidden');
                 
-                const data = await response.json();
-                
-                if (response.ok) {
-                    // Afișare QR code și secret
-                    document.getElementById('qr-code-container').innerHTML = `<img src="${data.qrCode}" alt="QR Code">`;
-                    document.getElementById('secret-code').textContent = data.secret;
-                    
-                    // Afișare container setup MFA
-                    document.getElementById('register-container').classList.add('hidden');
-                    document.getElementById('mfa-setup-container').classList.remove('hidden');
+                // Verifică dacă utilizatorul are MFA activat
+                if (users[username].mfaEnabled) {
+                    // Afișează formularul MFA
+                    document.getElementById('loginForm').classList.add('hidden');
+                    document.getElementById('mfaForm').classList.remove('hidden');
                 } else {
-                    alert(data.error || 'Eroare la înregistrare');
+                    // Utilizatorul nu are MFA activat, îl direcționăm către configurare
+                    document.getElementById('loginForm').classList.add('hidden');
+                    document.getElementById('setupMFA').classList.remove('hidden');
                 }
-            } catch (error) {
-                console.error('Eroare:', error);
-                alert('Eroare la comunicarea cu serverul');
+            } else {
+                errorElem.classList.remove('hidden');
             }
-        });
+        }
         
-        // Gestionarea verificării inițiale MFA
-        document.getElementById('verify-setup-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        function verifySecondFactor() {
+            const username = document.getElementById('username').value;
+            const mfaCode = document.getElementById('mfaCode').value;
+            const errorElem = document.getElementById('mfaError');
             
-            const token = document.getElementById('setup-token').value;
-            
-            try {
-                const response = await fetch('/verify-setup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    alert('Autentificarea în doi pași a fost configurată cu succes!');
-                    document.getElementById('mfa-setup-container').classList.add('hidden');
-                    document.getElementById('login-container').classList.remove('hidden');
-                } else {
-                    alert(data.error || 'Cod invalid');
-                }
-            } catch (error) {
-                console.error('Eroare:', error);
-                alert('Eroare la comunicarea cu serverul');
+            // În realitate, această verificare ar trebui făcută pe server
+            // Simulăm o verificare simplă
+            if (mfaCode.length === 6 && verifyTOTP(users[username].mfaSecret, mfaCode)) {
+                errorElem.classList.add('hidden');
+                document.getElementById('mfaForm').classList.add('hidden');
+                document.getElementById('successPage').classList.remove('hidden');
+            } else {
+                errorElem.classList.remove('hidden');
             }
-        });
+        }
         
-        // Gestionarea autentificării
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        function confirmMfaSetup() {
+            const username = document.getElementById('username').value;
+            const setupCode = document.getElementById('setupCode').value;
+            const errorElem = document.getElementById('setupError');
             
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
-            
-            try {
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
+            // Simulăm verificarea codului
+            if (setupCode.length === 6 && verifyTOTP(users[username].mfaSecret, setupCode)) {
+                // Activăm MFA pentru utilizator
+                users[username].mfaEnabled = true;
                 
-                const data = await response.json();
-                
-                if (response.ok) {
-                    if (data.requireMFA) {
-                        // Afișare formular verificare MFA
-                        document.getElementById('login-container').classList.add('hidden');
-                        document.getElementById('mfa-verify-container').classList.remove('hidden');
-                    } else {
-                        // Autentificare fără MFA
-                        showProtectedArea(username);
-                    }
-                } else {
-                    alert(data.error || 'Credențiale invalide');
-                }
-            } catch (error) {
-                console.error('Eroare:', error);
-                alert('Eroare la comunicarea cu serverul');
+                errorElem.classList.add('hidden');
+                document.getElementById('setupMFA').classList.add('hidden');
+                document.getElementById('successPage').classList.remove('hidden');
+            } else {
+                errorElem.classList.remove('hidden');
             }
-        });
+        }
         
-        // Gestionarea verificării MFA la autentificare
-        document.getElementById('verify-login-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        function backToLogin() {
+            document.getElementById('mfaForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        }
+        
+        function logout() {
+            document.getElementById('successPage').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('mfaCode').value = '';
+        }
+        
+        // Simulare TOTP - în mod normal s-ar folosi o bibliotecă TOTP reală
+        function verifyTOTP(secret, code) {
+            // Aceasta este doar o simulare, în realitate ar fi un algoritm TOTP real
+            // Pentru un site real, folosiți o bibliotecă precum OTPAuth sau verificați pe server
             
-            const token = document.getElementById('login-token').value;
-            
-            try {
-                const response = await fetch('/verify-login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    // Obținere profil utilizator și afișare zonă protejată
-                    const profileResponse = await fetch('/profile');
-                    const profileData = await profileResponse.json();
-                    
-                    showProtectedArea(profileData.username);
-                } else {
-                    alert(data.error || 'Cod invalid');
-                }
-            } catch (error) {
-                console.error('Eroare:', error);
-                alert('Eroare la comunicarea cu serverul');
-            }
-        });
-        
-        // Gestionarea deconectării
-        document.getElementById('logout-button').addEventListener('click', async () => {
-            try {
-                await fetch('/logout', { method: 'POST' });
-                
-                // Resetare și afișare formular de autentificare
-                document.getElementById('protected-container').classList.add('hidden');
-                document.getElementById('login-container').classList.remove('hidden');
-                document.getElementById('login-form').reset();
-            } catch (error) {
-                console.error('Eroare:', error);
-                alert('Eroare la deconectare');
-            }
-        });
-        
-        // Funcție pentru afișarea zonei protejate
-        function showProtectedArea(username) {
-            document.getElementById('username-display').textContent = username;
-            document.getElementById('login-container').classList.add('hidden');
-            document.getElementById('mfa-verify-container').classList.add('hidden');
-            document.getElementById('protected-container').classList.remove('hidden');
+            // Pentru acest exemplu, acceptăm orice cod valid de 6 cifre pentru simulare
+            return /^\d{6}$/.test(code);
         }
     </script>
 </body>
