@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autentificare în doi pași</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .qr-code img {
+            max-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sistem de autentificare în doi pași</h1>
+    
+    <!-- Formular de înregistrare -->
+    <div id="register-container" class="container">
+        <h2>Înregistrare</h2>
+        <form id="register-form">
+            <div>
+                <label for="register-username">Nume utilizator:</label>
+                <input type="text" id="register-username" required>
+            </div>
+            <div>
+                <label for="register-password">Parolă:</label>
+                <input type="password" id="register-password" required>
+            </div>
+            <button type="submit">Înregistrare</button>
+        </form>
+    </div>
+    
+    <!-- Configurare MFA -->
+    <div id="mfa-setup-container" class="container hidden">
+        <h2>Configurare autentificare în doi pași</h2>
+        <p>Scanează codul QR cu aplicația Single ID Authenticator:</p>
+        <div class="qr-code" id="qr-code-container"></div>
+        <p>Sau introdu acest cod secret manual în aplicație:</p>
+        <code id="secret-code"></code>
+        <form id="verify-setup-form">
+            <div>
+                <label for="setup-token">Introdu codul din aplicație:</label>
+                <input type="text" id="setup-token" required>
+            </div>
+            <button type="submit">Verifică și activează</button>
+        </form>
+    </div>
+    
+    <!-- Formular de autentificare -->
+    <div id="login-container" class="container">
+        <h2>Autentificare</h2>
+        <form id="login-form">
+            <div>
+                <label for="login-username">Nume utilizator:</label>
+                <input type="text" id="login-username" required>
+            </div>
+            <div>
+                <label for="login-password">Parolă:</label>
+                <input type="password" id="login-password" required>
+            </div>
+            <button type="submit">Autentificare</button>
+        </form>
+    </div>
+    
+    <!-- Verificare MFA -->
+    <div id="mfa-verify-container" class="container hidden">
+        <h2>Verificare în doi pași</h2>
+        <p>Introdu codul din aplicația Single ID Authenticator:</p>
+        <form id="verify-login-form">
+            <div>
+                <label for="login-token">Cod:</label>
+                <input type="text" id="login-token" required>
+            </div>
+            <button type="submit">Verifică</button>
+        </form>
+    </div>
+    
+    <!-- Zona protejată -->
+    <div id="protected-container" class="container hidden">
+        <h2>Profil utilizator</h2>
+        <p>Bine ai venit, <span id="username-display"></span>!</p>
+        <p>Ai accesat cu succes zona protejată.</p>
+        <button id="logout-button">Deconectare</button>
+    </div>
+    
+    <script>
+        // Gestionarea înregistrării
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('register-username').value;
+            const password = document.getElementById('register-password').value;
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Afișare QR code și secret
+                    document.getElementById('qr-code-container').innerHTML = `<img src="${data.qrCode}" alt="QR Code">`;
+                    document.getElementById('secret-code').textContent = data.secret;
+                    
+                    // Afișare container setup MFA
+                    document.getElementById('register-container').classList.add('hidden');
+                    document.getElementById('mfa-setup-container').classList.remove('hidden');
+                } else {
+                    alert(data.error || 'Eroare la înregistrare');
+                }
+            } catch (error) {
+                console.error('Eroare:', error);
+                alert('Eroare la comunicarea cu serverul');
+            }
+        });
+        
+        // Gestionarea verificării inițiale MFA
+        document.getElementById('verify-setup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const token = document.getElementById('setup-token').value;
+            
+            try {
+                const response = await fetch('/verify-setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Autentificarea în doi pași a fost configurată cu succes!');
+                    document.getElementById('mfa-setup-container').classList.add('hidden');
+                    document.getElementById('login-container').classList.remove('hidden');
+                } else {
+                    alert(data.error || 'Cod invalid');
+                }
+            } catch (error) {
+                console.error('Eroare:', error);
+                alert('Eroare la comunicarea cu serverul');
+            }
+        });
+        
+        // Gestionarea autentificării
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.requireMFA) {
+                        // Afișare formular verificare MFA
+                        document.getElementById('login-container').classList.add('hidden');
+                        document.getElementById('mfa-verify-container').classList.remove('hidden');
+                    } else {
+                        // Autentificare fără MFA
+                        showProtectedArea(username);
+                    }
+                } else {
+                    alert(data.error || 'Credențiale invalide');
+                }
+            } catch (error) {
+                console.error('Eroare:', error);
+                alert('Eroare la comunicarea cu serverul');
+            }
+        });
+        
+        // Gestionarea verificării MFA la autentificare
+        document.getElementById('verify-login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const token = document.getElementById('login-token').value;
+            
+            try {
+                const response = await fetch('/verify-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Obținere profil utilizator și afișare zonă protejată
+                    const profileResponse = await fetch('/profile');
+                    const profileData = await profileResponse.json();
+                    
+                    showProtectedArea(profileData.username);
+                } else {
+                    alert(data.error || 'Cod invalid');
+                }
+            } catch (error) {
+                console.error('Eroare:', error);
+                alert('Eroare la comunicarea cu serverul');
+            }
+        });
+        
+        // Gestionarea deconectării
+        document.getElementById('logout-button').addEventListener('click', async () => {
+            try {
+                await fetch('/logout', { method: 'POST' });
+                
+                // Resetare și afișare formular de autentificare
+                document.getElementById('protected-container').classList.add('hidden');
+                document.getElementById('login-container').classList.remove('hidden');
+                document.getElementById('login-form').reset();
+            } catch (error) {
+                console.error('Eroare:', error);
+                alert('Eroare la deconectare');
+            }
+        });
+        
+        // Funcție pentru afișarea zonei protejate
+        function showProtectedArea(username) {
+            document.getElementById('username-display').textContent = username;
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('mfa-verify-container').classList.add('hidden');
+            document.getElementById('protected-container').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
